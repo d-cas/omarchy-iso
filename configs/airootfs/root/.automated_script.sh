@@ -22,7 +22,10 @@ install_arch() {
   touch /var/log/omarchy-install.log
 
   start_log_output
-  install_base_system 2>&1 | sed -u 's/\x1b\[[0-9;]*[a-zA-Z]//g' >>/var/log/omarchy-install.log
+  # Disable pipefail temporarily for logging pipeline to prevent sed exit from breaking installation
+  set +o pipefail
+  install_base_system 2>&1 | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' >>/var/log/omarchy-install.log
+  set -o pipefail
   stop_log_output
 }
 

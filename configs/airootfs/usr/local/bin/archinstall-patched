@@ -1,0 +1,71 @@
+#!/bin/bash
+# Wrapper that patches archinstall to handle missing mkinitcpio.conf gracefully
+# This is needed for dracut migration where mkinitcpio package creates the file
+
+# Find the exact Python version dynamically
+PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+ARCHINSTALL_LIB="/usr/lib/python${PYTHON_VER}/site-packages/archinstall"
+INSTALLER_PY="$ARCHINSTALL_LIB/lib/installer.py"
+
+if [ -f "$INSTALLER_PY" ]; then
+    # Backup original if not already backed up
+    if [ ! -f "$INSTALLER_PY.original" ]; then
+        cp "$INSTALLER_PY" "$INSTALLER_PY.original"
+    fi
+
+    # Patch using Python with better error handling
+    INSTALLER_PY="$INSTALLER_PY" python3 << 'EOFPYTHON'
+import sys
+import os
+
+installer_py = os.environ.get("INSTALLER_PY")
+if not installer_py:
+    print("ERROR: INSTALLER_PY environment variable not set", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    with open(installer_py, "r") as f:
+        lines = f.readlines()
+
+    # Find and patch the mkinitcpio.conf access
+    # Look for the pattern with multiple variations to be more robust
+    patched = False
+    new_lines = []
+
+    for i, line in enumerate(lines):
+        # Detect the line that opens mkinitcpio.conf
+        if "mkinitcpio.conf" in line and "open(" in line and ("'r+'" in line or '"r+"' in line):
+            # Insert the file creation code before this line
+            indent = len(line) - len(line.lstrip())
+            new_lines.append(" " * indent + "# Dracut coexistence: create mkinitcpio.conf if missing\n")
+            new_lines.append(" " * indent + "import os\n")
+            new_lines.append(" " * indent + f"_mkinit_path = f'{{self.target}}/etc/mkinitcpio.conf'\n")
+            new_lines.append(" " * indent + "if not os.path.exists(_mkinit_path):\n")
+            new_lines.append(" " * (indent + 4) + "os.makedirs(os.path.dirname(_mkinit_path), exist_ok=True)\n")
+            new_lines.append(" " * (indent + 4) + "with open(_mkinit_path, 'w') as _f:\n")
+            new_lines.append(" " * (indent + 8) + "_f.write('''# mkinitcpio configuration\\nMODULES=()\\nBINARIES=()\\nFILES=()\\nHOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)\\nCOMPRESSION=\"zstd\"\\n''')\n")
+            patched = True
+
+        new_lines.append(line)
+
+    if patched:
+        with open(installer_py, "w") as f:
+            f.writelines(new_lines)
+        print(f"Successfully patched {installer_py}", file=sys.stderr)
+    else:
+        print(f"WARNING: Could not find mkinitcpio.conf pattern to patch in {installer_py}", file=sys.stderr)
+        print(f"Installation may fail if mkinitcpio package is not pre-installed", file=sys.stderr)
+
+except Exception as e:
+    print(f"ERROR: Failed to patch archinstall: {e}", file=sys.stderr)
+    sys.exit(1)
+EOFPYTHON
+
+    if [ $? -ne 0 ]; then
+        echo "ERROR: archinstall patching failed" >&2
+        exit 1
+    fi
+fi
+
+# Run the real archinstall with all original arguments
+exec /usr/bin/archinstall "$@"

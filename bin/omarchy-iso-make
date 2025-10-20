@@ -32,8 +32,8 @@ BUILD_ROOT=$(realpath "${BASH_SOURCE[0]%/*}/..")
 BUILD_RELEASE_PATH="$BUILD_ROOT/release"
 mkdir -p "$BUILD_RELEASE_PATH"
 
-OMARCHY_INSTALLER_REPO="${OMARCHY_INSTALLER_REPO:-basecamp/omarchy}"
-OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-master}"
+OMARCHY_INSTALLER_REPO="${OMARCHY_INSTALLER_REPO:-d-cas/omarchy}"
+OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-dracut-rebased}"
 
 DOCKER_ARGS=(
   --rm
@@ -66,12 +66,17 @@ fi
 docker run "${DOCKER_ARGS[@]}" archlinux/archlinux:latest /$BUILD_SCRIPT
 
 # Move as install ref
+#latest_iso=$(\ls -t "$BUILD_RELEASE_PATH"/*.iso | head -n1)
+#iso_ref="${latest_iso%.*}-$OMARCHY_INSTALLER_REF.iso"
+#mv -f "$latest_iso" "$iso_ref"
+
+# Move as install ref
 latest_iso=$(\ls -t "$BUILD_RELEASE_PATH"/*.iso | head -n1)
-iso_ref="${latest_iso%.*}-$OMARCHY_INSTALLER_REF.iso"
+iso_ref="$BUILD_RELEASE_PATH/omarchy-$OMARCHY_INSTALLER_REF.iso" # Fixed name
 mv -f "$latest_iso" "$iso_ref"
 
 # Offer to boot the new build
 if [[ -z "$NO_BOOT_OFFER" ]]; then
   echo
-  gum confirm "Boot $iso_ref?" && omarchy-iso-boot "$iso_ref"
+  gum confirm "Boot $iso_ref?" && "$BUILD_ROOT/bin/omarchy-iso-boot" "$iso_ref"
 fi

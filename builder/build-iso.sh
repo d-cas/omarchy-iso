@@ -2,6 +2,10 @@
 
 set -e
 
+# Default to dracut-rebased branch for testing
+OMARCHY_INSTALLER_REPO="${OMARCHY_INSTALLER_REPO:-d-cas/omarchy}"
+OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-dracut-rebased}"
+
 # Note that these are packages installed to the Arch container used to build the ISO.
 pacman-key --init
 pacman --noconfirm -Sy archlinux-keyring
@@ -26,7 +30,11 @@ rm -rf "$build_cache_dir/airootfs/etc/xdg/reflector"
 cp -r /configs/* $build_cache_dir/
 
 # Clone Omarchy itself
+echo "DEBUG: Cloning from https://github.com/$OMARCHY_INSTALLER_REPO.git branch $OMARCHY_INSTALLER_REF"
 git clone -b $OMARCHY_INSTALLER_REF https://github.com/$OMARCHY_INSTALLER_REPO.git "$build_cache_dir/airootfs/root/omarchy"
+echo "DEBUG: Clone complete, checking what was cloned:"
+ls -la "$build_cache_dir/airootfs/root/omarchy/install/" || echo "ERROR: install directory doesn't exist!"
+grep -E "(mkinitcpio|dracut)" "$build_cache_dir/airootfs/root/omarchy/install/omarchy-other.packages" || echo "ERROR: packages not found in file!"
 
 # Make log uploader available in the ISO too
 mkdir -p "$build_cache_dir/airootfs/usr/local/bin/"
@@ -60,6 +68,9 @@ ln -s "$offline_mirror_dir" "/var/cache/omarchy/mirror/offline"
 # Copy the pacman.conf to the ISO's /etc directory so the live environment uses our
 # same config when booted
 cp $build_cache_dir/pacman.conf "$build_cache_dir/airootfs/etc/pacman.conf"
+
+# archinstall-patched wrapper is created in configs/airootfs/usr/local/bin/
+# It patches archinstall at runtime to handle missing mkinitcpio.conf (dracut coexistence)
 
 # Finally, we assemble the entire ISO
 mkarchiso -v -w "$build_cache_dir/work/" -o "/out/" "$build_cache_dir/"
