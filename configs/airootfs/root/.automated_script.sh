@@ -136,7 +136,7 @@ EOFPATCH_ARCHINSTALL
   LUKS_UUID=""
   if [ -f "user_configuration.json" ]; then
     # Check if encryption is enabled in the config
-    ENCRYPTION_ENABLED=$(jq -r '.disk_encryption.encryption_type // empty' user_configuration.json 2>/dev/null || echo "")
+    ENCRYPTION_ENABLED=$(jq -r '.disk_config.disk_encryption.encryption_type // empty' user_configuration.json 2>/dev/null || echo "")
 
     if [ -n "$ENCRYPTION_ENABLED" ] && [ "$ENCRYPTION_ENABLED" != "null" ]; then
       echo "BREADCRUMB: Disk encryption detected in configuration" >&2
@@ -174,8 +174,11 @@ EOFPATCH_ARCHINSTALL
   # we can detect the actual LUKS UUID
   echo "BREADCRUMB: Post-archinstall LUKS detection starting..." >&2
 
-  if [ -f /tmp/.luks_marker ]; then
-    echo "BREADCRUMB: Encryption was enabled, detecting LUKS UUID..." >&2
+  # Always try to detect LUKS, even if marker wasn't created (defense in depth)
+  # Check both the marker file AND if /mnt is actually on a /dev/mapper device
+  ROOT_DEVICE_CHECK=$(findmnt -n -o SOURCE /mnt 2>/dev/null || echo "")
+  if [ -f /tmp/.luks_marker ] || [[ "$ROOT_DEVICE_CHECK" == /dev/mapper/* ]]; then
+    echo "BREADCRUMB: Encryption detected (marker or /dev/mapper device), detecting LUKS UUID..." >&2
 
     # Find the encrypted root device that archinstall just created
     # It should be mounted at /mnt
@@ -258,4 +261,11 @@ if [[ $(tty) == "/dev/tty1" ]]; then
   run_configurator
   install_arch
   install_omarchy
+
+  # Copy installation log to the installed system for debugging
+  if [ -f /var/log/omarchy-install.log ]; then
+    mkdir -p /mnt/var/log
+    cp /var/log/omarchy-install.log /mnt/var/log/omarchy-install.log
+    echo "Installation log copied to /mnt/var/log/omarchy-install.log"
+  fi
 fi
