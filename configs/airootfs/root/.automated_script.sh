@@ -190,7 +190,8 @@ EOFPATCH_ARCHINSTALL
 
     if [[ "$ROOT_DEVICE" == /dev/mapper/* ]]; then
       # This is a mapped device, find its backing LUKS device
-      MAPPER_NAME=$(basename "$ROOT_DEVICE")
+      # Strip btrfs subvolume notation (e.g., /dev/mapper/root[/@] -> root)
+      MAPPER_NAME=$(basename "$ROOT_DEVICE" | sed 's/\[.*\]//')
       LUKS_DEVICE=$(cryptsetup status "$MAPPER_NAME" 2>/dev/null | grep "device:" | awk '{print $2}')
       echo "BREADCRUMB: LUKS backing device: ${LUKS_DEVICE}" >&2
 
