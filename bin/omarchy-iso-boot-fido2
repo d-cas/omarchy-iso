@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+
+if [ $# -eq 0 ]; then
+  echo "Usage: omarchy-iso-boot-fido2 [release/omarchy.iso] [reuse]"
+  echo "  Boots with YubiKey USB passthrough for FIDO2 testing"
+  echo "  VM stored at: ~/truenas/dev-projects/omarchy_repos/omarchy_vms/"
+  echo "  SSH available at: ssh -p 2222 root@localhost (after installing openssh)"
+  exit 1
+fi
+
+if ! pacman -Q qemu-full >/dev/null || ! pacman -Q edk2-ovmf >/dev/null; then
+  sudo pacman -S --noconfirm --needed --quiet qemu-full edk2-ovmf
+fi
+
+# Use permanent storage location
+VM_DIR="$HOME/truenas/dev-projects/omarchy_repos/omarchy_vms"
+mkdir -p "$VM_DIR"
+
+DISK="$VM_DIR/omarchy-dracut-test.qcow2"
+OVMF_VARS="$VM_DIR/OVMF_VARS.4m.fd"
+
+if [[ ! -f $DISK || $2 != "reuse" ]]; then
+  echo "Creating new VM disk at $DISK"
+  qemu-img create -f qcow2 "$DISK" 20G
+  cp /usr/share/edk2/x64/OVMF_VARS.4m.fd "$OVMF_VARS"
+fi
+
+echo "Detecting YubiKeys..."
+lsusb | grep -i yubi || echo "WARNING: No YubiKeys detected!"
+
+# Boot from ISO before we've installed, then boot from drive after
+qemu-system-x86_64 \
+  -cpu host -enable-kvm -machine q35,accel=kvm \
+  -smp "$(nproc)" \
+  -m 8192 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+  -drive if=pflash,format=raw,file="$OVMF_VARS" \
+  -drive file="$DISK",format=qcow2,if=none,id=drive0 \
+  -device virtio-blk-pci,drive=drive0,bootindex=1 \
+  -drive file="$1",media=cdrom,if=none,format=raw,id=cdrom0 \
+  -device ide-cd,drive=cdrom0,bootindex=2 \
+  -device virtio-vga-gl \
+  -display gtk,gl=on \
+  -usb -device usb-tablet \
+  -device usb-host,vendorid=0x1050,productid=0x0406 \
+  -device usb-host,vendorid=0x1050,productid=0x0406 \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+  -device virtio-net-pci,netdev=net0 \
+  -boot menu=on

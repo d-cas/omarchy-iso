@@ -33,7 +33,7 @@ BUILD_RELEASE_PATH="$BUILD_ROOT/release"
 mkdir -p "$BUILD_RELEASE_PATH"
 
 OMARCHY_INSTALLER_REPO="${OMARCHY_INSTALLER_REPO:-d-cas/omarchy}"
-OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-dracut-rebased}"
+OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-feature/dracut-migration}"
 
 DOCKER_ARGS=(
   --rm
@@ -72,7 +72,9 @@ docker run "${DOCKER_ARGS[@]}" archlinux/archlinux:latest /$BUILD_SCRIPT
 
 # Move as install ref
 latest_iso=$(\ls -t "$BUILD_RELEASE_PATH"/*.iso | head -n1)
-iso_ref="$BUILD_RELEASE_PATH/omarchy-$OMARCHY_INSTALLER_REF.iso" # Fixed name
+# Sanitize branch name by replacing slashes with dashes
+sanitized_ref="${OMARCHY_INSTALLER_REF//\//-}"
+iso_ref="$BUILD_RELEASE_PATH/omarchy-$sanitized_ref.iso" # Fixed name
 mv -f "$latest_iso" "$iso_ref"
 
 # Offer to boot the new build

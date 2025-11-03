@@ -2,9 +2,9 @@
 
 set -e
 
-# Default to dracut-rebased branch for testing
+# Default to feature/dracut-migration branch for testing
 OMARCHY_INSTALLER_REPO="${OMARCHY_INSTALLER_REPO:-d-cas/omarchy}"
-OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-dracut-rebased}"
+OMARCHY_INSTALLER_REF="${OMARCHY_INSTALLER_REF:-feature/dracut-migration}"
 
 # Note that these are packages installed to the Arch container used to build the ISO.
 pacman-key --init
